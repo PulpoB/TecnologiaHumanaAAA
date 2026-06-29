@@ -104,9 +104,10 @@ export function Login({ onLoginSuccess }: LoginProps) {
 
         <div className="mt-8 pt-6 border-t border-border">
           <p className="text-xs text-center text-muted-foreground mb-4">Accesos rápidos de prueba:</p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button onClick={() => quickLogin('carlos.ramirez@universidad.edu.mx', 'hash123')} className="p-2 bg-blue-50 text-blue-700 text-[10px] rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors">Entrar como Estudiante</button>
             <button onClick={() => quickLogin('c.lopez@universidad.edu.mx', 'hash456')} className="p-2 bg-purple-50 text-purple-700 text-[10px] rounded-lg border border-purple-100 hover:bg-purple-100 transition-colors">Entrar como Profesor</button>
+            <button onClick={() => quickLogin('admin@universidad.edu.mx', 'admin123')} className="p-2 bg-slate-50 text-slate-700 text-[10px] rounded-lg border border-slate-100 hover:bg-slate-100 transition-colors">Entrar como Admin</button>
           </div>
         </div>
       </div>
