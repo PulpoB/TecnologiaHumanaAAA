@@ -1,6 +1,5 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
-const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
@@ -8,7 +7,6 @@ const multer = require('multer');
 
 const app = express();
 const port = 3001;
-const EMAIL_DOMAIN = process.env.EMAIL_DOMAIN || 'institucion.cl';
 
 // Middleware
 app.use(cors());
@@ -44,51 +42,6 @@ const db = new sqlite3.Database(dbPath, (err) => {
     console.log('Conectado a la base de datos SQLite.');
 });
 
-const ensureUserColumns = () => new Promise((resolve, reject) => {
-    db.all('PRAGMA table_info(users)', [], (err, rows) => {
-        if (err) return reject(err);
-
-        const existingColumns = rows.map((row) => row.name);
-        const missing = [];
-
-        if (!existingColumns.includes('rut')) {
-            missing.push("ALTER TABLE users ADD COLUMN rut VARCHAR(50)");
-        }
-        if (!existingColumns.includes('birth_date')) {
-            missing.push("ALTER TABLE users ADD COLUMN birth_date DATE");
-        }
-        if (!existingColumns.includes('sex')) {
-            missing.push("ALTER TABLE users ADD COLUMN sex VARCHAR(20)");
-        }
-        if (!existingColumns.includes('document_image_url')) {
-            missing.push("ALTER TABLE users ADD COLUMN document_image_url TEXT");
-        }
-        if (!existingColumns.includes('must_change_password')) {
-            missing.push("ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0");
-        }
-
-        if (!missing.length) {
-            return resolve();
-        }
-
-        db.serialize(() => {
-            let completed = 0;
-            missing.forEach((sql) => {
-                db.run(sql, (alterErr) => {
-                    if (alterErr) {
-                        console.error('Error al alterar tabla users:', alterErr.message);
-                        return reject(alterErr);
-                    }
-                    completed += 1;
-                    if (completed === missing.length) {
-                        resolve();
-                    }
-                });
-            });
-        });
-    });
-});
-
 const initializeDatabase = () => new Promise((resolve, reject) => {
     if (!fs.existsSync(schemaPath)) {
         resolve();
@@ -103,67 +56,57 @@ const initializeDatabase = () => new Promise((resolve, reject) => {
             return;
         }
 
-        ensureUserColumns().then(() => {
-            const hashStudent = bcrypt.hashSync('hash123', 10);
-            const hashTeacher = bcrypt.hashSync('hash456', 10);
-            const hashAdmin = bcrypt.hashSync('admin123', 10);
+        const seedSql = `
+            INSERT OR IGNORE INTO users (id, name, email, password_hash, role) VALUES
+                ('u1', 'Carlos Eduardo Ramírez Torres', 'carlos.ramirez@universidad.edu.mx', 'hash123', 'student'),
+                ('u2', 'Ing. Carlos López', 'c.lopez@universidad.edu.mx', 'hash456', 'teacher');
 
-            const seedSql = `
-                INSERT OR IGNORE INTO users (id, name, email, password_hash, role, must_change_password) VALUES
-                    ('u1', 'Carlos Eduardo Ramírez Torres', 'carlos.ramirez@universidad.edu.mx', '${hashStudent}', 'student', 0),
-                    ('u2', 'Ing. Carlos López', 'c.lopez@universidad.edu.mx', '${hashTeacher}', 'teacher', 0),
-                    ('u3', 'Admin Central', 'admin@universidad.edu.mx', '${hashAdmin}', 'admin', 0);
+            INSERT OR IGNORE INTO careers (id, name, code, total_credits, duration_semesters) VALUES
+                ('c1', 'Ingeniería en Sistemas Computacionales', 'ISC', 450, 9);
 
-                INSERT OR IGNORE INTO careers (id, name, code, total_credits, duration_semesters) VALUES
-                    ('c1', 'Ingeniería en Sistemas Computacionales', 'ISC', 450, 9);
+            INSERT OR IGNORE INTO student_profiles (user_id, career_id, enrollment_number, semester, gpa, credits_completed, phone, city, bio) VALUES
+                ('u1', 'c1', '2021-ISC-4782', 6, 9.2, 240, '+52 55 1234 5678', 'Ciudad de México, México', 'Estudiante apasionado por el desarrollo web.');
 
-                INSERT OR IGNORE INTO student_profiles (user_id, career_id, enrollment_number, semester, gpa, credits_completed, phone, city, bio) VALUES
-                    ('u1', 'c1', '2021-ISC-4782', 6, 9.2, 240, '+52 55 1234 5678', 'Ciudad de México, México', 'Estudiante apasionado por el desarrollo web.');
+            INSERT OR IGNORE INTO teacher_profiles (user_id, title, department) VALUES
+                ('u2', 'Ingeniero de Software', 'Departamento de Computación');
 
-                INSERT OR IGNORE INTO teacher_profiles (user_id, title, department) VALUES
-                    ('u2', 'Ingeniero de Software', 'Departamento de Computación');
+            INSERT OR IGNORE INTO subjects (id, name, code, color_hex, career_id, semester) VALUES
+                ('s1', 'Programación Web', 'PW-2026', '#2563EB', 'c1', 6),
+                ('s2', 'Economía Internacional', 'EI-2026', '#8B5CF6', 'c1', 6);
 
-                INSERT OR IGNORE INTO subjects (id, name, code, color_hex, career_id, semester) VALUES
-                    ('s1', 'Programación Web', 'PW-2026', '#2563EB', 'c1', 6),
-                    ('s2', 'Economía Internacional', 'EI-2026', '#8B5CF6', 'c1', 6);
+            INSERT OR IGNORE INTO subject_enrollments (id, student_id, subject_id, teacher_id, semester, year, status) VALUES
+                ('se1', 'u1', 's1', 'u2', '2026-1', 2026, 'active'),
+                ('se2', 'u1', 's2', 'u2', '2026-1', 2026, 'active');
 
-                INSERT OR IGNORE INTO subject_enrollments (id, student_id, subject_id, teacher_id, semester, year, status) VALUES
-                    ('se1', 'u1', 's1', 'u2', '2026-1', 2026, 'active'),
-                    ('se2', 'u1', 's2', 'u2', '2026-1', 2026, 'active');
+            INSERT OR IGNORE INTO assignments (id, title, description, subject_id, teacher_id, due_date, max_points, status) VALUES
+                ('a1', 'Proyecto Final: Sistema MVC', 'Desarrollar una aplicación web completa usando el patrón MVC con Node.js y SQLite.', 's1', 'u2', '2026-06-21 23:59:59', 50, 'published'),
+                ('a2', 'Ensayo: Tipos de Cambio', 'Redactar un análisis sobre la fluctuación del peso frente al dólar en el último trimestre.', 's2', 'u2', '2026-06-15 12:00:00', 20, 'published');
 
-                INSERT OR IGNORE INTO assignments (id, title, description, subject_id, teacher_id, due_date, max_points, status) VALUES
-                    ('a1', 'Proyecto Final: Sistema MVC', 'Desarrollar una aplicación web completa usando el patrón MVC con Node.js y SQLite.', 's1', 'u2', '2026-06-21 23:59:59', 50, 'published'),
-                    ('a2', 'Ensayo: Tipos de Cambio', 'Redactar un análisis sobre la fluctuación del peso frente al dólar en el último trimestre.', 's2', 'u2', '2026-06-15 12:00:00', 20, 'published');
+            INSERT OR IGNORE INTO evaluation_types (id, subject_id, name, type, weight, max_grade) VALUES
+                ('et1', 's1', 'Parcial 1', 'parcial', 30, 10),
+                ('et2', 's1', 'Quiz JS Avanzado', 'quiz', 15, 10),
+                ('et3', 's1', 'Proyecto Final', 'proyecto', 35, 10),
+                ('et4', 's2', 'Parcial 1', 'parcial', 30, 10),
+                ('et5', 's2', 'Quiz de Mercado', 'quiz', 15, 10),
+                ('et6', 's2', 'Ensayo Final', 'tarea', 25, 10);
 
-                INSERT OR IGNORE INTO evaluation_types (id, subject_id, name, type, weight, max_grade) VALUES
-                    ('et1', 's1', 'Parcial 1', 'parcial', 30, 10),
-                    ('et2', 's1', 'Quiz JS Avanzado', 'quiz', 15, 10),
-                    ('et3', 's1', 'Proyecto Final', 'proyecto', 35, 10),
-                    ('et4', 's2', 'Parcial 1', 'parcial', 30, 10),
-                    ('et5', 's2', 'Quiz de Mercado', 'quiz', 15, 10),
-                    ('et6', 's2', 'Ensayo Final', 'tarea', 25, 10);
+            INSERT OR IGNORE INTO evaluations (id, evaluation_type_id, student_id, grade, max_grade, feedback, is_published, eval_date, graded_by, graded_at) VALUES
+                ('ev1', 'et1', 'u1', 8.7, 10, 'Buen manejo de fundamentos básicos.', 1, '2026-06-01', 'u2', '2026-06-02'),
+                ('ev2', 'et2', 'u1', 9.1, 10, 'Excelente comprensión de JavaScript.', 1, '2026-06-08', 'u2', '2026-06-09'),
+                ('ev3', 'et3', 'u1', NULL, 10, '', 0, '2026-06-22', NULL, NULL),
+                ('ev4', 'et4', 'u1', 8.3, 10, 'Análisis sólido del contexto internacional.', 1, '2026-06-03', 'u2', '2026-06-04'),
+                ('ev5', 'et5', 'u1', 8.8, 10, 'Buena interpretación de indicadores.', 1, '2026-06-10', 'u2', '2026-06-11'),
+                ('ev6', 'et6', 'u1', NULL, 10, '', 0, '2026-06-20', NULL, NULL);
+        `;
 
-                INSERT OR IGNORE INTO evaluations (id, evaluation_type_id, student_id, grade, max_grade, feedback, is_published, eval_date, graded_by, graded_at) VALUES
-                    ('ev1', 'et1', 'u1', 8.7, 10, 'Buen manejo de fundamentos básicos.', 1, '2026-06-01', 'u2', '2026-06-02'),
-                    ('ev2', 'et2', 'u1', 9.1, 10, 'Excelente comprensión de JavaScript.', 1, '2026-06-08', 'u2', '2026-06-09'),
-                    ('ev3', 'et3', 'u1', NULL, 10, '', 0, '2026-06-22', NULL, NULL),
-                    ('ev4', 'et4', 'u1', 8.3, 10, 'Análisis sólido del contexto internacional.', 1, '2026-06-03', 'u2', '2026-06-04'),
-                    ('ev5', 'et5', 'u1', 8.8, 10, 'Buena interpretación de indicadores.', 1, '2026-06-10', 'u2', '2026-06-11'),
-                    ('ev6', 'et6', 'u1', NULL, 10, '', 0, '2026-06-20', NULL, NULL);
-            `;
-
-            db.exec(seedSql, (seedErr) => {
-                if (seedErr) {
-                    console.error('Error al insertar datos demo:', seedErr.message);
-                    reject(seedErr);
-                    return;
-                }
-                console.log('Esquema cargado correctamente y datos demo asegurados.');
-                resolve();
-            });
-        }).catch((columnErr) => {
-            console.error('Error al asegurar columnas de usuario:', columnErr.message);
-            reject(columnErr);
+        db.exec(seedSql, (seedErr) => {
+            if (seedErr) {
+                console.error('Error al insertar datos demo:', seedErr.message);
+                reject(seedErr);
+                return;
+            }
+            console.log('Esquema cargado correctamente y datos demo asegurados.');
+            resolve();
         });
     });
 });
@@ -173,114 +116,15 @@ const initializeDatabase = () => new Promise((resolve, reject) => {
 // 0. Login (Simulado para este ejemplo)
 app.post('/api/login', (req, res) => {
     const { email, password } = req.body;
-    const sql = `SELECT id, name, email, role, avatar_url, password_hash, must_change_password FROM users WHERE email = ?`;
-
-    db.get(sql, [email], (err, user) => {
+    const sql = `SELECT id, name, email, role, avatar_url FROM users WHERE email = ? AND password_hash = ?`;
+    
+    // En un entorno real, usaríamos bcrypt para comparar hashes
+    db.get(sql, [email, password], (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!user) return res.status(401).json({ error: "Credenciales inválidas" });
-
-        const passwordHash = user.password_hash || '';
-        const isBcryptHash = passwordHash.startsWith('$2a$') || passwordHash.startsWith('$2b$');
-        const isValid = isBcryptHash
-            ? bcrypt.compareSync(password, passwordHash)
-            : password === passwordHash;
-
-        if (!isValid) {
-            return res.status(401).json({ error: "Credenciales inválidas" });
-        }
-
+        
         console.log(`>>> Usuario autenticado: ${user.name} (${user.role})`);
-        res.json({
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            avatar_url: user.avatar_url,
-            must_change_password: Boolean(user.must_change_password)
-        });
-    });
-});
-
-// 1. Registrar persona desde Admin
-app.post('/api/admin/persons', upload.single('document_image'), (req, res) => {
-    const {
-        rut,
-        firstName,
-        lastName,
-        birthDate,
-        sex,
-        person_type,
-        tempPassword,
-        created_by_admin
-    } = req.body;
-
-    if (!created_by_admin) {
-        return res.status(400).json({ error: 'created_by_admin es requerido' });
-    }
-
-    if (!firstName || !lastName || !birthDate || !sex || !tempPassword) {
-        return res.status(400).json({ error: 'Debe proporcionar nombres, apellidos, fecha de nacimiento, sexo y contraseña temporal.' });
-    }
-
-    const url = req.file ? `http://localhost:3001/uploads/${req.file.filename}` : null;
-    const role = person_type === 'teacher' ? 'teacher' : 'student';
-
-    const sqlAdmin = `SELECT id, role FROM users WHERE id = ?`;
-    db.get(sqlAdmin, [created_by_admin], (err, admin) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!admin || admin.role !== 'admin') {
-            return res.status(403).json({ error: 'Solo un admin puede registrar personas' });
-        }
-
-        const sanitizeBase = (value) =>
-            value
-                .normalize('NFD')
-                .replace(/\p{Diacritic}/gu, '')
-                .replace(/[^a-zA-Z0-9]/g, '')
-                .toLowerCase();
-
-        const firstInitial = sanitizeBase(firstName.trim().charAt(0));
-        const lastPart = sanitizeBase(lastName.trim().replace(/\s+/g, ''));
-        const baseEmail = `${firstInitial}${lastPart}`;
-        const domain = EMAIL_DOMAIN;
-        const likePattern = `${baseEmail}%@${domain}`;
-
-        db.all(`SELECT email FROM users WHERE email LIKE ?`, [likePattern], (emailErr, rows) => {
-            if (emailErr) return res.status(500).json({ error: emailErr.message });
-
-            const existingEmails = new Set(rows.map((row) => row.email.toLowerCase()));
-            let emailCandidate = `${baseEmail}@${domain}`;
-            let counter = 1;
-
-            while (existingEmails.has(emailCandidate)) {
-                emailCandidate = `${baseEmail}${counter}@${domain}`;
-                counter += 1;
-            }
-
-            const passwordHash = bcrypt.hashSync(tempPassword, 10);
-            const name = `${firstName.trim()} ${lastName.trim()}`;
-
-            const sql = `
-                INSERT INTO users (
-                    name, email, password_hash, role,
-                    rut, birth_date, sex, document_image_url,
-                    must_change_password
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`;
-
-            db.run(sql, [
-                name,
-                emailCandidate,
-                passwordHash,
-                role,
-                rut || null,
-                birthDate || null,
-                sex || null,
-                url
-            ], function(insertErr) {
-                if (insertErr) return res.status(500).json({ error: insertErr.message });
-                res.json({ success: true, email: emailCandidate, id: this.lastID });
-            });
-        });
+        res.json(user);
     });
 });
 

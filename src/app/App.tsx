@@ -12,7 +12,6 @@ import { Materials } from "./components/Materials";
 import { Grades } from "./components/Grades";
 import { Profile } from "./components/Profile";
 import { Login } from "./components/Login";
-import { AdminPanel } from "./components/AdminPanel";
 
 /* MARKER-MAKE-KIT-INVOKED */
 
@@ -60,10 +59,6 @@ export default function App() {
   // Si no hay usuario, mostramos la pantalla de Login directamente
   if (!user) {
     return <Login onLoginSuccess={(userData) => setUser(userData)} />;
-  }
-
-  if (user.role === "admin") {
-    return <AdminPanel user={user} onLogout={handleLogout} />;
   }
 
   // Obtener iniciales para el avatar
