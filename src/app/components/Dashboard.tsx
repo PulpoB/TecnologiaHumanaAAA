@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import {
   BookOpen, CheckCircle, Clock, AlertCircle, TrendingUp,
-  Calendar, FileText, Bell, ChevronRight, Award, BarChart2,
-  Zap, ArrowRight
+  Calendar, FileText, ChevronRight, Award, BarChart2,
+  Zap, ArrowRight, Eye
 } from "lucide-react";
 
 interface Task {
@@ -106,6 +106,7 @@ interface DashboardProps {
 export function Dashboard({ user, onNavigate }: DashboardProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [grades, setGrades] = useState<SubjectGrade[]>([]);
+  const isTeacher = user?.role === "teacher";
 
   useEffect(() => {
     if (!user?.id) return;
@@ -188,10 +189,6 @@ export function Dashboard({ user, onNavigate }: DashboardProps) {
             )}
           </p>
         </div>
-        <button className="relative p-2 rounded-lg hover:bg-accent transition-colors">
-          <Bell size={20} className="text-muted-foreground" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
-        </button>
       </div>
 
       {/* Stats */}
@@ -267,7 +264,13 @@ export function Dashboard({ user, onNavigate }: DashboardProps) {
                         }}
                         className="px-3 py-1.5 bg-primary text-primary-foreground text-xs rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1"
                       >
-                        Entregar
+                        {isTeacher ? (
+                          <>
+                            <Eye size={13} /> Revisar
+                          </>
+                        ) : (
+                          "Entregar"
+                        )}
                       </button>
                     )}
                   </div>

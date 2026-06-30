@@ -7,6 +7,11 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(200) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     avatar_url TEXT,
+    rut VARCHAR(50),
+    birth_date DATE,
+    sex VARCHAR(20),
+    document_image_url TEXT,
+    must_change_password BOOLEAN DEFAULT 0,
     role VARCHAR(20) NOT NULL CHECK (role IN ('student','teacher','admin')),
     is_active BOOLEAN DEFAULT 1,
     last_login DATETIME,
@@ -210,6 +215,30 @@ CREATE TABLE IF NOT EXISTS material_stars (
     FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
     UNIQUE (material_id, student_id)
 );
+
+
+-- 8. Solicitudes de ampliación de plazo
+CREATE TABLE IF NOT EXISTS deadline_extension_requests (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    assignment_id TEXT NOT NULL,
+    student_id TEXT NOT NULL,
+    teacher_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    requested_due_date DATETIME NOT NULL,
+    status TEXT CHECK(status IN ('pending','approved','rejected')) DEFAULT 'pending',
+    teacher_response TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (assignment_id) REFERENCES assignments(id) ON DELETE CASCADE,
+    FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_deadline_requests_teacher_status 
+ON deadline_extension_requests(teacher_id, status);
+
+CREATE INDEX IF NOT EXISTS idx_deadline_requests_student_status 
+ON deadline_extension_requests(student_id, status);
 
 -- Datos de ejemplo iniciales (Fijos para el usuario de demo)
 INSERT OR IGNORE INTO users (id, name, email, password_hash, role) 
